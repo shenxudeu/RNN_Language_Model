@@ -326,7 +326,8 @@ if __name__ == '__main__':
     # gradient check
     gradient_check()
 
-
+    embed()
+    HERE
 
 
 
