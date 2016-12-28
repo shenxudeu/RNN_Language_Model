@@ -112,6 +112,28 @@ class RNN:
         dLdW = np.zeros(self.W.shape)
         
         ###### BACKWARD PASS
+
+        # time T
+        dLdPT = np.array([1./p[T][i] if y[T][i]==1 else 0 for i in len(y[T])])  # (w,)
+        dPTdOT = np.zeros((p.shape[1],o.shape[1]))  # (w, w)
+        for i in range(p.shape[1]):
+            for j in range(o.shape[1]):
+                if i==j:
+                    dPTdOT[i][j] = p[i]*(1-p[i])
+                else:
+                    dPTdOT[i][j] = -p[i]*p[j]
+        dLdOT = dPTdOT.dot(dLdPT)       # (w,)
+        dLdV += np.outer(dLdOT, s[T])    # (w, h)
+
+        dLdST = dLdOT.dot(V)            # (h,)
+
+        # time T-1
+        for dt in reversed(range(T)):
+            dSdXPS = np.diag(1 - spx[dt]**2)    # (h,h)
+            dLdXPS = dLdST.dot(dSdXPS)          # (h,)
+        
+            dLdW += np.outer(dLdXPS, s[dt])      # (h,) x (h,) = (h,h)
+            dLdU += np.outer(dLdXPS, x[dt])      # (h,) x (w,) = (h,w)
         ## TO BE FINISHED
 
         return [dLdU, dLdV, dLdW]
