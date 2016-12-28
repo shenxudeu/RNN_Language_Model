@@ -222,37 +222,37 @@ def train(train_x, train_y, vocabulary_size, learning_rate=1e-3, nepoch=100, eva
     
 if __name__ == '__main__':
     vocabulary_size=8000
-    (train_x, train_y, vocab, index_to_word, word_to_index) = get_data(vocabulary_size)
-    np.random.seed(10)
+    #(train_x, train_y, vocab, index_to_word, word_to_index) = get_data(vocabulary_size)
+    #np.random.seed(10)
     model = RNN(vocabulary_size,hidden_dim=100)
     
-    # Test one sentence foward-propagation.
-    o,p, s, spx = model.forward_propagation(one_hot(train_x[10],vocabulary_size))
-    print 'Testing one sentence forward-propagation.'
-    print '\tInput sentense has %d words'%len(train_x[10])
-    print '\tOutput prediction has shape = (%d, %d)\n'%(p.shape[0],p.shape[1])
+    ## Test one sentence foward-propagation.
+    #o,p, s, spx = model.forward_propagation(one_hot(train_x[10],vocabulary_size))
+    #print 'Testing one sentence forward-propagation.'
+    #print '\tInput sentense has %d words'%len(train_x[10])
+    #print '\tOutput prediction has shape = (%d, %d)\n'%(p.shape[0],p.shape[1])
 
-    # Test loss of all training examples
-    loss = model.get_loss(train_x, train_y)
-    # Random guess loss
-    random_loss = -1. * np.log(1./vocabulary_size)
-    print 'Testing loss on all training examples.'
-    print '\tExpected loss for random prediction: %.4f'%random_loss
-    print '\tActual loss: %.4f\n'%loss
+    ## Test loss of all training examples
+    #loss = model.get_loss(train_x, train_y)
+    ## Random guess loss
+    #random_loss = -1. * np.log(1./vocabulary_size)
+    #print 'Testing loss on all training examples.'
+    #print '\tExpected loss for random prediction: %.4f'%random_loss
+    #print '\tActual loss: %.4f\n'%loss
     
     # Gradient check
     grad_check_vocabulary_size=100
     grad_check_model = RNN(grad_check_vocabulary_size, hidden_dim=10,bptt_truncate=1000)
     grad_check_model.gradient_check(np.array([[0,1,2,3,4,5]]), np.array([[1,2,3,4,5,6]]))
 
-    # Time test for one step training
-    print '\nTesting one step training.'
-    with time_it():
-        model.sgd_step(train_x[10], train_y[10],1e-3)
-    
-    # Start training
-    print '\n\n==================== START Training ==================='
-    train(train_x, train_y, vocabulary_size, learning_rate=5e-3, nepoch=100, evaluate_loss_after=1)
+    ## Time test for one step training
+    #print '\nTesting one step training.'
+    #with time_it():
+    #    model.sgd_step(train_x[10], train_y[10],1e-3)
+    #
+    ## Start training
+    #print '\n\n==================== START Training ==================='
+    #train(train_x, train_y, vocabulary_size, learning_rate=5e-3, nepoch=100, evaluate_loss_after=1)
     
 
 

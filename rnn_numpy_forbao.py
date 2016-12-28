@@ -105,6 +105,7 @@ class RNN:
         T = len(x)
         ###### FORWARD PASS
         o, p, s, spx = self.forward_propagation(one_hot(x, self.word_dim))
+        x = one_hot(x, self.word_dim)
 
         # Initialize the gradients in these variables
         dLdU = np.zeros(self.U.shape)
@@ -112,29 +113,32 @@ class RNN:
         dLdW = np.zeros(self.W.shape)
         
         ###### BACKWARD PASS
+        dLdST = np.zeros(self.hidden_dim)
+        dLdXPS = np.zeros(self.hidden_dim)
+        for t in reversed(range(T)):
+            # time T
+            dLdPT = np.zeros((self.word_dim))
+            dLdPT[y[t]] = -1./p[t][y[t]]           # (w,)
+            dPTdOT = -np.outer(p[t],p[t]) * (1. - np.identity(p.shape[1])) + np.diag(p[t]*(1. - p[t]))
 
-        # time T
-        dLdPT = np.array([1./p[T][i] if y[T][i]==1 else 0 for i in len(y[T])])  # (w,)
-        dPTdOT = np.zeros((p.shape[1],o.shape[1]))  # (w, w)
-        for i in range(p.shape[1]):
-            for j in range(o.shape[1]):
-                if i==j:
-                    dPTdOT[i][j] = p[i]*(1-p[i])
-                else:
-                    dPTdOT[i][j] = -p[i]*p[j]
-        dLdOT = dPTdOT.dot(dLdPT)       # (w,)
-        dLdV += np.outer(dLdOT, s[T])    # (w, h)
+            dLdOT = dPTdOT.dot(dLdPT)       # (w,)
+            
+            dLdV += np.outer(dLdOT, s[t])    # (w, h)
 
-        dLdST = dLdOT.dot(V)            # (h,)
+            dLdST += dLdOT.dot(self.V)            # (h,)
+            dLdXPS += (1. - s[t]**2) * dLdST
 
-        # time T-1
-        for dt in reversed(range(T)):
-            dSdXPS = np.diag(1 - spx[dt]**2)    # (h,h)
-            dLdXPS = dLdST.dot(dSdXPS)          # (h,)
-        
-            dLdW += np.outer(dLdXPS, s[dt])      # (h,) x (h,) = (h,h)
-            dLdU += np.outer(dLdXPS, x[dt])      # (h,) x (w,) = (h,w)
-        ## TO BE FINISHED
+            dLdW += np.outer(dLdXPS, s[t-1])      # (h,) x (h,) = (h,h)
+            dLdU += np.outer(dLdXPS, x[t])      # (h,) x (w,) = (h,w)
+
+
+            ## time T-1
+            #for dt in reversed(np.arange(-1,t)):
+            #    dLdW += np.outer(dLdXPS, s[dt])      # (h,) x (h,) = (h,h)
+            #    dLdU += np.outer(dLdXPS, x[dt+1])      # (h,) x (w,) = (h,w)
+
+            #    dLdST = np.dot(dLdXPS, self.W)
+            #    dLdXPS = (1. - s[dt]**2) * dLdST
 
         return [dLdU, dLdV, dLdW]
 
@@ -224,37 +228,38 @@ def train(train_x, train_y, vocabulary_size, learning_rate=1e-3, nepoch=100, eva
     
 if __name__ == '__main__':
     vocabulary_size=8000
-    (train_x, train_y, vocab, index_to_word, word_to_index) = get_data(vocabulary_size)
-    np.random.seed(10)
+    #(train_x, train_y, vocab, index_to_word, word_to_index) = get_data(vocabulary_size)
+    #np.random.seed(10)
     model = RNN(vocabulary_size,hidden_dim=100)
     
-    # Test one sentence foward-propagation.
-    o,p, s, spx = model.forward_propagation(one_hot(train_x[10],vocabulary_size))
-    print 'Testing one sentence forward-propagation.'
-    print '\tInput sentense has %d words'%len(train_x[10])
-    print '\tOutput prediction has shape = (%d, %d)\n'%(p.shape[0],p.shape[1])
+    ## Test one sentence foward-propagation.
+    #o,p, s, spx = model.forward_propagation(one_hot(train_x[10],vocabulary_size))
+    #print 'Testing one sentence forward-propagation.'
+    #print '\tInput sentense has %d words'%len(train_x[10])
+    #print '\tOutput prediction has shape = (%d, %d)\n'%(p.shape[0],p.shape[1])
 
-    # Test loss of all training examples
-    loss = model.get_loss(train_x, train_y)
-    # Random guess loss
-    random_loss = -1. * np.log(1./vocabulary_size)
-    print 'Testing loss on all training examples.'
-    print '\tExpected loss for random prediction: %.4f'%random_loss
-    print '\tActual loss: %.4f\n'%loss
+    ## Test loss of all training examples
+    #loss = model.get_loss(train_x, train_y)
+    ## Random guess loss
+    #random_loss = -1. * np.log(1./vocabulary_size)
+    #print 'Testing loss on all training examples.'
+    #print '\tExpected loss for random prediction: %.4f'%random_loss
+    #print '\tActual loss: %.4f\n'%loss
+
     
     # Gradient check
     grad_check_vocabulary_size=100
     grad_check_model = RNN(grad_check_vocabulary_size, hidden_dim=10,bptt_truncate=1000)
     grad_check_model.gradient_check(np.array([[0,1,2,3,4,5]]), np.array([[1,2,3,4,5,6]]))
 
-    # Time test for one step training
-    print '\nTesting one step training.'
-    with time_it():
-        model.sgd_step(train_x[10], train_y[10],1e-3)
-    
-    # Start training
-    print '\n\n==================== START Training ==================='
-    train(train_x, train_y, vocabulary_size, learning_rate=5e-3, nepoch=100, evaluate_loss_after=1)
+    ## Time test for one step training
+    #print '\nTesting one step training.'
+    #with time_it():
+    #    model.sgd_step(train_x[10], train_y[10],1e-3)
+    #
+    ## Start training
+    #print '\n\n==================== START Training ==================='
+    #train(train_x, train_y, vocabulary_size, learning_rate=5e-3, nepoch=100, evaluate_loss_after=1)
     
 
 
