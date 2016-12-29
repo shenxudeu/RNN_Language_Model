@@ -57,7 +57,7 @@ class LSTM:
 
         # Initialize weights, first row is bias, initialize bias to zero
         np.random.seed(seed)
-        fan_in = word_dim + hidden_dim + 1
+        fan_in = word_dim + hidden_dim
         self.WF = np.random.randn(fan_in, hidden_dim) / np.sqrt(fan_in)
         self.WF[0,:] = 0.
         self.WC = np.random.randn(fan_in, hidden_dim) / np.sqrt(fan_in)
@@ -101,7 +101,8 @@ class LSTM:
         icG = np.zeros((T, batch_size, self.hidden_dim)) # input C gate
         icGf = np.zeros(icG.shape) # input C gate activation
 
-        hcx = np.zeros((T, batch_size, self.word_dim +self. hidden_dim + 1)) # h concat x
+        #hcx = np.zeros((T, batch_size, self.word_dim +self. hidden_dim + 1)) # h concat x
+        hcx = np.zeros((T, batch_size, self.word_dim +self. hidden_dim )) # h concat x
 
         # Output tensor, log prob and prob
         y = np.zeros((T, batch_size, self.word_dim))   # log prob
@@ -110,9 +111,9 @@ class LSTM:
         # For each time step ...
         for t in np.arange(T):
             # concat h and x
-            hcx[t,:,0] = 1.
-            hcx[t,:,1:self.word_dim+1] = x[t,:,:]
-            hcx[t,:,self.word_dim+1:] = h[t-1,:,:]
+            #hcx[t,:,0] = 1.
+            hcx[t,:,0:self.word_dim] = x[t,:,:]
+            hcx[t,:,self.word_dim:] = h[t-1,:,:]
             
             # Compute gates
             oG[t] = hcx[t].dot(self.WO) 
@@ -186,6 +187,8 @@ class LSTM:
 
         ########## BACKWARD PASS - Unfolding the network
         dL = 1.
+        dh_t_ = np.zeros((batch_size, self.hidden_dim)) 
+        dc_t_ = np.zeros((batch_size, self.hidden_dim))
         for t in np.arange(T)[::-1]:
             # backward L = cross_entropy(y, softmax(ys))
             dys[t] = p[t] * dL
@@ -193,51 +196,92 @@ class LSTM:
             
             # backward ys_t = h_t . V
             dV += h[t].T.dot(dys[t])
-            dh_t = dys[t].dot(self.V.T)
+            dh_t = dys[t].dot(self.V.T) + dh_t_
 
-            # Backpropagation through time (for at most self.bptt_truncate steps)
-            for bptt_step in np.arange(max(0,t-self.bptt_truncate), t+1)[::-1]:
-                # backward h_t = oGf_t * cf_t
-                doGf_t = dh_t * cf[bptt_step]
-                dcf_t = dh_t * oGf[bptt_step]
-                
-                # backward oGf_t = sigma(oG)
-                doG_t = (1. - oGf[bptt_step]) * oGf[bptt_step] * doGf_t
-                
-                # backward OG_t = hcx_t . WO
-                dWO += hcx[bptt_step].T.dot(doG_t)
-                dhcx_t = doG_t.dot(self.WO.T)
 
-                # backward cf_t = tanh(c_t)
-                dc_t = (1. - cf[bptt_step]**2) * dcf_t
+            # backward h_t = oGf_t * cf_t
+            doGf_t = dh_t * cf[t]
+            dcf_t = dh_t * oGf[t]
+            
+            # backward oGf_t = sigma(oG)
+            doG_t = (1. - oGf[t]) * oGf[t] * doGf_t
+            
+            # backward OG_t = hcx_t . WO
+            dWO += hcx[t].T.dot(doG_t)
+            dhcx_t = doG_t.dot(self.WO.T)
+
+            # backward cf_t = tanh(c_t)
+            dc_t = (1. - cf[t]**2) * dcf_t + dc_t_
+ 
+            # backward c_t = fGf_t * c_tm1 + iGf_t * icGf_t
+            dfGf_t = c[t-1] * dc_t
+            dc_t_ = fGf[t] * dc_t
+            diGf_t = icGf[t] * dc_t
+            dicGf_t = iGf[t] * dc_t
+
+            # backward fGf_t = sigma(fG_t)
+            dfG_t = (1. - fGf[t]) * fGf[t] * dfGf_t
+            # backward fG_t = hcx_t . WF
+            dWF += hcx[t].T.dot(dfG_t)
+            dhcx_t += dfG_t.dot(self.WF.T)
+
+            # backward iGf_t = sigma(iG_t)
+            diG_t = (1. - iGf[t]) * iGf[t] * diGf_t
+            # backward iG_t = hcx_t . WI
+            dWI += hcx[t].T.dot(diG_t)
+            dhcx_t += diG_t.dot(self.WI.T)
+
+            # backward icGf_t = tanh(icG_t)
+            dicG_t = (1. - icGf[t]**2) * dicGf_t
+            # backward cG_t = hcx_t . WC
+            dWC += hcx[t].T.dot(dicG_t)
+            dhcx_t += dicG_t.dot(self.WC.T)
+            
+            dh_t_ = dhcx_t[:,self.word_dim:]
+
+            ## Backpropagation through time (for at most self.bptt_truncate steps)
+            #for bptt_step in np.arange(max(0,t-self.bptt_truncate), t+1)[::-1]:
+            #    # backward h_t = oGf_t * cf_t
+            #    doGf_t = dh_t * cf[bptt_step]
+            #    dcf_t = dh_t * oGf[bptt_step]
+            #    
+            #    # backward oGf_t = sigma(oG)
+            #    doG_t = (1. - oGf[bptt_step]) * oGf[bptt_step] * doGf_t
+            #    
+            #    # backward OG_t = hcx_t . WO
+            #    dWO += hcx[bptt_step].T.dot(doG_t)
+            #    dhcx_t = doG_t.dot(self.WO.T)
+
+            #    # backward cf_t = tanh(c_t)
+            #    dc_t = (1. - cf[bptt_step]**2) * dcf_t
      
-                # backward c_t = fGf_t * c_tm1 + iGf_t * icGf_t
-                dfGf_t = c[bptt_step-1] * dc_t
-                dc_t_minus_1 = fGf[bptt_step] * dc_t
-                diGf_t = icGf[bptt_step] * dc_t
-                dicGf_t = iGf[bptt_step] * dc_t
+            #    # backward c_t = fGf_t * c_tm1 + iGf_t * icGf_t
+            #    dfGf_t = c[bptt_step-1] * dc_t
+            #    dc_t_minus_1 = fGf[bptt_step] * dc_t
+            #    diGf_t = icGf[bptt_step] * dc_t
+            #    dicGf_t = iGf[bptt_step] * dc_t
 
-                # backward fGf_t = sigma(fG_t)
-                dfG_t = (1. - fGf[bptt_step]) * fGf[bptt_step] * dfGf_t
-                # backward fG_t = hcx_t . WF
-                dWF += hcx[bptt_step].T.dot(dfG_t)
-                dhcx_t += dfG_t.dot(self.WF.T)
+            #    # backward fGf_t = sigma(fG_t)
+            #    dfG_t = (1. - fGf[bptt_step]) * fGf[bptt_step] * dfGf_t
+            #    # backward fG_t = hcx_t . WF
+            #    dWF += hcx[bptt_step].T.dot(dfG_t)
+            #    dhcx_t += dfG_t.dot(self.WF.T)
 
-                # backward iGf_t = sigma(iG_t)
-                diG_t = (1. - iGf[bptt_step]) * iGf[bptt_step] * diGf_t
-                # backward iG_t = hcx_t . WI
-                dWI += hcx[bptt_step].T.dot(diG_t)
-                dhcx_t += diG_t.dot(self.WI.T)
+            #    # backward iGf_t = sigma(iG_t)
+            #    diG_t = (1. - iGf[bptt_step]) * iGf[bptt_step] * diGf_t
+            #    # backward iG_t = hcx_t . WI
+            #    dWI += hcx[bptt_step].T.dot(diG_t)
+            #    dhcx_t += diG_t.dot(self.WI.T)
 
-                # backward icGf_t = tanh(icG_t)
-                dicG_t = (1. - icGf[bptt_step]**2) * dicGf_t
-                # backward cG_t = hcx_t . WC
-                dWC += hcx[bptt_step].T.dot(dicG_t)
-                dhcx_t += dicG_t.dot(self.WC.T)
-                
-                dh_t_minus_1 = dhcx_t[:,self.word_dim+1:]
-                dh_t = dh_t_minus_1
-                dc_t = dc_t_minus_1
+            #    # backward icGf_t = tanh(icG_t)
+            #    dicG_t = (1. - icGf[bptt_step]**2) * dicGf_t
+            #    # backward cG_t = hcx_t . WC
+            #    dWC += hcx[bptt_step].T.dot(dicG_t)
+            #    dhcx_t += dicG_t.dot(self.WC.T)
+            #    
+            #    dh_t_minus_1 = dhcx_t[:,self.word_dim+1:]
+            #    dh_t = dh_t_minus_1
+            #    dc_t = dc_t_minus_1
             
         return [dWF, dWC, dWI, dWO, dV]
 

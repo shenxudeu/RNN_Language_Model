@@ -113,8 +113,7 @@ class RNN:
         dLdW = np.zeros(self.W.shape)
         
         ###### BACKWARD PASS
-        dLdST = np.zeros(self.hidden_dim)
-        dLdXPS = np.zeros(self.hidden_dim)
+        dLdST_ = np.zeros(self.hidden_dim)
         for t in reversed(range(T)):
             # time T
             dLdPT = np.zeros((self.word_dim))
@@ -125,12 +124,12 @@ class RNN:
             
             dLdV += np.outer(dLdOT, s[t])    # (w, h)
 
-            dLdST += dLdOT.dot(self.V)            # (h,)
-            dLdXPS += (1. - s[t]**2) * dLdST
+            dLdST = dLdOT.dot(self.V) + dLdST_           # (h,)
+            dLdXPS = (1. - s[t]**2) * dLdST
 
             dLdW += np.outer(dLdXPS, s[t-1])      # (h,) x (h,) = (h,h)
             dLdU += np.outer(dLdXPS, x[t])      # (h,) x (w,) = (h,w)
-
+            dLdST_ = np.dot(dLdXPS, self.W)
 
             ## time T-1
             #for dt in reversed(np.arange(-1,t)):

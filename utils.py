@@ -6,8 +6,8 @@ def softmax(x):
     Numerical stable version of softmax
     '''
     e_x = np.exp(x - np.max(x))
-    #return e_x / e_x.sum(axis=1)
-    return e_x / e_x.sum(axis=0)
+    return e_x / e_x.sum(axis=1)
+    #return e_x / e_x.sum(axis=0)
 
 def one_hot(x,M):
     x_onehot = np.zeros((len(x), M))
